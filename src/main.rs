@@ -89,7 +89,6 @@ impl Chip8 {
         self.pc = nnn;
     }
     fn set(&mut self, x: u8, nnn: u16) {
-        self.push(self.pc);
         self.v[x as usize] = nnn as u8;
     }
     fn add(&mut self, x: u8, nn: u8) {
@@ -110,15 +109,13 @@ impl Chip8 {
         let mut flag = false;
 
         for rows in 0..num {
-            let byte = self.memory[(self.i as usize) + (n as u16) as usize];
+            let byte = self.memory[(self.i as usize) + (rows as u16) as usize];
 
             for row in 0..8 {
 
-                let bit = byte >> row;
-
-                if bit != 0 {
+                if (byte & (0x80 >> row)) != 0 {
                     let x_coord = (x + (row as u16)) as usize % SCREEN_WIDTH;
-                    let y_coord = (y + (rows as u16)) as usize / SCREEN_WIDTH;
+                    let y_coord = (y + (rows as u16)) as usize % SCREEN_WIDTH;
 
                     let coord = x_coord + SCREEN_WIDTH * y_coord;
 
@@ -128,11 +125,7 @@ impl Chip8 {
 
             }
 
-            if flag {
-                self.v[0xf] = 1;
-            }else {
-                self.v[0xf] = 0;
-            }
+            self.v[0xf] = if flag { 1 } else { 0 };
         }
     }
     
@@ -145,15 +138,17 @@ impl Chip8 {
 
         let init = opcode & 0xf000;
         
-        match init {
+        match opcode {
             0x00e0 => self.clear_screen(),
-            0x1000 => self.jump(nnn),
-            0x6000 => self.set(x, nnn),
-            0x7000 => self.add(x, nn),
-            0xa000 => self.set_index(nnn),
-            0xd000 => self.display(self.v[x as usize].into(), self.v[y as usize].into(), n),
-            _ => println!("no hay instruccion"),
-        }
+            _ => match init {
+                0x1000 => self.jump(nnn),
+                0x6000 => self.set(x, nnn),
+                0x7000 => self.add(x, nn),
+                0xa000 => self.set_index(nnn),
+                0xd000 => self.display(self.v[x as usize].into(), self.v[y as usize].into(), n),
+                _ => println!("no hay instruccion"),
+            }
+        }    
     }
 }
 
@@ -163,7 +158,7 @@ fn main() {
 
     let mut engine = console_engine::ConsoleEngine::init(64, 32, 3);
     
-    x.load_archive("./roms/ibm.ch8".to_string());
+    x.load_archive("./roms/logo.ch8".to_string());
 
     loop {
         engine.as_mut().expect("FALLO").wait_frame();
