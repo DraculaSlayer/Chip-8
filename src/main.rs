@@ -38,6 +38,22 @@ struct Chip8 {
     sl: u8,
 }
 
+fn slip_num(x: u8) -> Vec<u8> {
+    let mut number = x;
+    if number == 0 {
+        return vec![0];
+    }
+    
+    let mut digitos = Vec::new();
+    while number > 0 {
+        digitos.push(number % 10);
+        number /= 10;
+    }
+    
+    digitos.reverse();
+    digitos
+}
+
 impl Chip8 {
     fn new() -> Chip8 {
         let mut new_chip: Chip8 = Chip8 {
@@ -134,7 +150,58 @@ impl Chip8 {
             self.pc += 2;
         }
     }
-
+    
+    // ---Instruccion 8XY---
+    
+    fn set_vx_vy(&mut self, x: u8, y: u8) {
+        self.v[x as usize] = self.v[y as usize];
+    }
+    
+    fn operator_or(&mut self, x: u8, y: u8) {
+        self.v[x as usize] |= self.v[y as usize];
+    }
+    
+    fn operator_and(&mut self, x: u8, y: u8) {
+        self.v[x as usize] &= self.v[y as usize];
+    }
+    
+    fn operator_xor(&mut self, x: u8, y: u8) {
+        self.v[x as usize] ^= self.v[y as usize];
+    }
+    
+    fn add_vx_vy(&mut self, x: u8, y: u8) {
+        
+        let (sum, overflow) = self.v[x as usize].overflowing_add(self.v[y as usize]);
+        
+        self.v[x as usize] = sum;
+        self.v[0xF] = if overflow { 1 } else { 0 };
+    }
+    
+    fn sub_vx_vy(&mut self, x: u8, y: u8) {
+        let flag = if self.v[x as usize] >= self.v[y as usize] { 1 } else { 0 };
+        
+        self.v[x as usize] = self.v[x as usize].wrapping_sub(self.v[y as usize]);
+        self.v[0xF] = flag;
+    }
+    
+    fn sub_vy_vx(&mut self, x: u8, y: u8) {
+        let flag = if self.v[y as usize] >= self.v[x as usize] { 1 } else { 0 };
+        
+        self.v[x as usize] = self.v[y as usize] - self.v[x as usize];
+        self.v[0xF] = flag;
+    }
+    
+    fn shift_right_vx(&mut self, x: u8) {
+        self.v[0xF] = self.v[x as usize] & 0x1;
+        self.v[x as usize] = self.v[x as usize] >> 1;
+    }
+    
+    fn shift_left_vx(&mut self, x: u8) {
+        self.v[0xF] = (self.v[x as usize] >> 7) & 0x1;
+        self.v[x as usize] = self.v[x as usize] << 1;
+    }
+    // ---------------------
+    
     fn set(&mut self, x: u8, nn: u8) {
         self.v[x as usize] = nn;
     }
@@ -179,6 +246,33 @@ impl Chip8 {
         }
     }
     
+    // ---- fx00 ----
+    
+    fn save_memory(&mut self, x: u8) {
+        for i in 0..(x as usize) {
+            self.memory[(self.i as usize) + i] = self.v[i];
+        }
+    }
+    
+    fn load_memory(&mut self, x: u8) {
+        for i in 0..(x as usize) {
+            self.v[i] = self.memory[(self.i as usize) + i];
+        }
+    }
+    
+    fn div_vx(&mut self, x: u8) {
+        let list = slip_num(x);
+        
+        for i in 0..(list.len() - 1) {
+            self.memory[(i as usize) + i] = list[i];
+        }
+    }
+    
+    fn add_i(&mut self, x: u8) {
+        self.i += self.v[x as usize] as u16;
+    }
+    // --------------
+    
     fn run(&mut self, opcode: u16) {
         let mut x: u8 = ((opcode >> 8) & 0x000f).try_into().unwrap();
         let mut y: u8 = ((opcode >> 4) & 0x000f).try_into().unwrap();
@@ -200,11 +294,27 @@ impl Chip8 {
                 0x6000 => self.set(x, nn),
                 0x7000 => self.add(x, nn),
                 0x8000 => {match n {
-                            0x0 => 
+                            0x0 => self.set_vx_vy(x, y),
+                            0x1 => self.operator_or(x, y),
+                            0x2 => self.operator_and(x, y),
+                            0x3 => self.operator_xor(x, y),
+                            0x4 => self.add_vx_vy(x, y),
+                            0x5 => self.sub_vx_vy(x, y),
+                            0x6 => self.shift_right_vx(x),
+                            0x7 => self.sub_vy_vx(x, y),
+                            0xE => self.shift_left_vx(x),
+                            1_u8..=u8::MAX => todo!(),
                 };},
                 0x9000 => self.skip_9xy0(x, y),
                 0xa000 => self.set_index(nnn),
                 0xd000 => self.display(self.v[x as usize].into(), self.v[y as usize].into(), n),
+                0xf000 => {match (nn){
+                            0x33 => self.div_vx(self.v[x as usize]),
+                            0x55 => self.save_memory(x),
+                            0x65 => self.load_memory(x),
+                            1_u8..=u8::MAX => todo!(),
+                            0_u8 => todo!(),
+                };},
                 _ => println!("no hay instruccion"),
             }
         }    
@@ -217,7 +327,7 @@ fn main() {
 
     let mut engine = console_engine::ConsoleEngine::init(64, 32, 3);
     
-    x.load_archive("./roms/logo.ch8".to_string());
+    x.load_archive("./roms/test3.ch8".to_string());
 
     loop {
         engine.as_mut().expect("FALLO").wait_frame();
