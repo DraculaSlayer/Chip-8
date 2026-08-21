@@ -57,11 +57,21 @@ impl Chip8 {
         new_chip
     }
 
+    // Function about Stack
     fn push(&mut self, val: u16) {
         self.stack[self.sp as usize] = val;
         self.sp += 1;
     }
+    fn del(&mut self) -> u16 {
+        let mut pc: u16 = 0;
+        pc = self.stack[self.sp as usize];
+        self.stack[self.sp as usize] = 0x0;
+        self.sp -= 1;
+
+        pc
+    }
     
+    // Load ROM in RAM
     fn load_archive(&mut self, path: String) {
         let mut file = File::open(path);
         let mut buffer = Vec::new();
@@ -72,6 +82,7 @@ impl Chip8 {
 
         self.memory[start..end].copy_from_slice(&buffer);
     }
+
     fn fetch(&mut self) -> u16 {
         let bit_left = self.memory[self.pc as usize] as u16;
         let bit_right = self.memory[(self.pc+1) as usize] as u16;
@@ -85,18 +96,57 @@ impl Chip8 {
     fn clear_screen(&mut self) {
         self.screen = [false; SCREEN_WIDTH*SCREEN_HEIGHT];
     }
+
     fn jump(&mut self, nnn: u16) {
         self.pc = nnn;
     }
-    fn set(&mut self, x: u8, nnn: u16) {
-        self.v[x as usize] = nnn as u8;
+
+    fn jump_stack(&mut self, nnn: u16) {
+        self.push(self.pc);
+        self.pc = nnn;
     }
+
+    fn del_stack(&mut self) {
+        self.pc = self.del();
+    }
+
+    // Skip instruccion
+    fn skip_3xnn(&mut self, x: u8, nn: u8) {
+        if x == nn {
+            self.pc += 2;
+        }
+    }
+    
+    fn skip_4xnn(&mut self, x: u8, nn: u8) {
+        if self.v[x as usize] != nn {
+            self.pc += 2;
+        }
+    }
+
+    fn skip_5xy0(&mut self, x: u8, y: u8) {
+        if self.v[x as usize] == self.v[y as usize] {
+            self.pc += 2;
+        }
+    }
+
+    fn skip_9xy0(&mut self, x: u8, y: u8) {
+        if self.v[x as usize] != self.v[y as usize] {
+            self.pc += 2;
+        }
+    }
+
+    fn set(&mut self, x: u8, nn: u8) {
+        self.v[x as usize] = nn;
+    }
+
     fn add(&mut self, x: u8, nn: u8) {
         self.v[x as usize] = self.v[x as usize].wrapping_add(nn);
     }
+
     fn set_index(&mut self, nnn: u16) {
         self.i = nnn;
     }
+
     fn display(&mut self, vx: usize, vy: usize, n: u8) {
 
         let x = vx as u16;
@@ -115,7 +165,7 @@ impl Chip8 {
 
                 if (byte & (0x80 >> row)) != 0 {
                     let x_coord = (x + (row as u16)) as usize % SCREEN_WIDTH;
-                    let y_coord = (y + (rows as u16)) as usize % SCREEN_WIDTH;
+                    let y_coord = (y + (rows as u16)) as usize % SCREEN_HEIGHT;
 
                     let coord = x_coord + SCREEN_WIDTH * y_coord;
 
@@ -132,9 +182,9 @@ impl Chip8 {
     fn run(&mut self, opcode: u16) {
         let mut x: u8 = ((opcode >> 8) & 0x000f).try_into().unwrap();
         let mut y: u8 = ((opcode >> 4) & 0x000f).try_into().unwrap();
-        let mut n: u8 = (opcode & 0x000f).try_into().unwrap();
-        let mut nn: u8 = (opcode & 0x00ff).try_into().unwrap();
-        let mut nnn: u16 = opcode & 0x0fff;
+        let mut n: u8 = (opcode & 0xf).try_into().unwrap();
+        let mut nn: u8 = (opcode & 0xff).try_into().unwrap();
+        let mut nnn: u16 = opcode & 0xfff;
 
         let init = opcode & 0xf000;
         
@@ -142,8 +192,17 @@ impl Chip8 {
             0x00e0 => self.clear_screen(),
             _ => match init {
                 0x1000 => self.jump(nnn),
-                0x6000 => self.set(x, nnn),
+                0x2000 => self.jump_stack(nnn),
+                0x00ee => self.del_stack(),
+                0x3000 => self.skip_3xnn(x, nn),
+                0x4000 => self.skip_4xnn(x, nn),
+                0x5000 => self.skip_5xy0(x, y),
+                0x6000 => self.set(x, nn),
                 0x7000 => self.add(x, nn),
+                0x8000 => {match n {
+                            0x0 => 
+                };},
+                0x9000 => self.skip_9xy0(x, y),
                 0xa000 => self.set_index(nnn),
                 0xd000 => self.display(self.v[x as usize].into(), self.v[y as usize].into(), n),
                 _ => println!("no hay instruccion"),
