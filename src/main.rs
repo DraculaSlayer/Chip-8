@@ -3,6 +3,7 @@ use std::io::prelude::*;
 use console_engine::Color;
 use console_engine::KeyCode;
 use console_engine::pixel;
+use std::env;
 
 const SCREEN_WIDTH: usize = 64;
 const SCREEN_HEIGHT: usize = 32;
@@ -38,22 +39,6 @@ struct Chip8 {
     sl: u8,
 }
 
-fn slip_num(x: u8) -> Vec<u8> {
-    let mut number = x;
-    if number == 0 {
-        return vec![0];
-    }
-    
-    let mut digitos = Vec::new();
-    while number > 0 {
-        digitos.push(number % 10);
-        number /= 10;
-    }
-    
-    digitos.reverse();
-    digitos
-}
-
 impl Chip8 {
     fn new() -> Chip8 {
         let mut new_chip: Chip8 = Chip8 {
@@ -77,11 +62,6 @@ impl Chip8 {
     fn push(&mut self, val: u16) {
         self.stack[self.sp as usize] = val;
         self.sp += 1;
-    }
-    fn del(&mut self) -> u16 {
-        let pc: u16 = self.stack[self.sp as usize];
-
-        pc
     }
     
     // Load ROM in RAM
@@ -252,23 +232,25 @@ impl Chip8 {
     // ---- fx00 ----
     
     fn save_memory(&mut self, x: u8) {
-        for i in 0..(x as usize) {
+        for i in 0..=(x as usize) {
             self.memory[(self.i as usize) + i] = self.v[i];
         }
+        self.i += (x as u16) + 1;
     }
     
     fn load_memory(&mut self, x: u8) {
-        for i in 0..(x as usize) {
+        for i in 0..=(x as usize) {
             self.v[i] = self.memory[(self.i as usize) + i];
         }
+        self.i += (x as u16) + 1;
     }
     
     fn div_vx(&mut self, x: u8) {
-        let list = slip_num(x);
-        
-        for i in 0..(list.len() - 1) {
-            self.memory[(i as usize) + i] = list[i];
-        }
+        let i = self.i as usize;
+
+        self.memory[i]     = x / 100;
+        self.memory[i + 1] = (x / 10) % 10;
+        self.memory[i + 2] = x % 10;
     }
     
     fn add_i(&mut self, x: u8) {
@@ -308,7 +290,7 @@ impl Chip8 {
                         0x6 => self.shift_right_vx(x),
                         0x7 => self.sub_vy_vx(x, y),
                         0xE => self.shift_left_vx(x),
-                        1_u8..=u8::MAX => todo!(),
+                        _ => println!("no hay instruccion 2")
             };},
             0x9000 => self.skip_9xy0(x, y),
             0xa000 => self.set_index(nnn),
@@ -318,10 +300,9 @@ impl Chip8 {
                         0x55 => self.save_memory(x),
                         0x65 => self.load_memory(x),
                         0x1E => self.add_i(x),
-                        0_u8 => todo!(),
-                        _ => println!("no hay instruccion 2"),
+                        _ => println!("no hay instruccion 23"),
             };},
-            _ => println!("no hay instruccion 3"),
+            _ => println!("no hay instruccion 4"),
         }    
     }
 }
@@ -330,9 +311,19 @@ impl Chip8 {
 fn main() {
     let mut x: Chip8 = Chip8::new();
 
+    let args: Vec<_> = env::args().collect();
+
+    if args.len() < 2 {
+        println!("falta argumentos");
+        return;
+    }
+
     let mut engine = console_engine::ConsoleEngine::init(64, 32, 3);
-    
-    x.load_archive("./roms/test3.ch8".to_string());
+  
+
+    if args[1] == "-r" {
+        x.load_archive(args[2].to_string());
+    }
 
     loop {
         engine.as_mut().expect("FALLO").wait_frame();
