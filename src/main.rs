@@ -79,8 +79,7 @@ impl Chip8 {
         self.sp += 1;
     }
     fn del(&mut self) -> u16 {
-        let mut pc: u16 = 0;
-        pc = self.stack[self.sp as usize];
+        let pc: u16 = self.stack[self.sp as usize];
         self.stack[self.sp as usize] = 0x0;
         self.sp -= 1;
 
@@ -89,9 +88,9 @@ impl Chip8 {
     
     // Load ROM in RAM
     fn load_archive(&mut self, path: String) {
-        let mut file = File::open(path);
+        let file = File::open(path);
         let mut buffer = Vec::new();
-        file.expect("fallo").read_to_end(&mut buffer);
+        let _ = file.expect("fallo").read_to_end(&mut buffer);
 
         let start = 0x200 as usize;
         let end = (0x200 as usize) + buffer.len();
@@ -187,7 +186,7 @@ impl Chip8 {
     fn sub_vy_vx(&mut self, x: u8, y: u8) {
         let flag = if self.v[y as usize] >= self.v[x as usize] { 1 } else { 0 };
         
-        self.v[x as usize] = self.v[y as usize] - self.v[x as usize];
+        self.v[x as usize] = self.v[y as usize].wrapping_sub(self.v[x as usize]);
         self.v[0xF] = flag;
     }
     
@@ -274,11 +273,11 @@ impl Chip8 {
     // --------------
     
     fn run(&mut self, opcode: u16) {
-        let mut x: u8 = ((opcode >> 8) & 0x000f).try_into().unwrap();
-        let mut y: u8 = ((opcode >> 4) & 0x000f).try_into().unwrap();
-        let mut n: u8 = (opcode & 0xf).try_into().unwrap();
-        let mut nn: u8 = (opcode & 0xff).try_into().unwrap();
-        let mut nnn: u16 = opcode & 0xfff;
+        let x: u8 = ((opcode >> 8) & 0x000f).try_into().unwrap();
+        let y: u8 = ((opcode >> 4) & 0x000f).try_into().unwrap();
+        let n: u8 = (opcode & 0xf).try_into().unwrap();
+        let nn: u8 = (opcode & 0xff).try_into().unwrap();
+        let nnn: u16 = opcode & 0xfff;
 
         let init = opcode & 0xf000;
         
@@ -308,12 +307,13 @@ impl Chip8 {
                 0x9000 => self.skip_9xy0(x, y),
                 0xa000 => self.set_index(nnn),
                 0xd000 => self.display(self.v[x as usize].into(), self.v[y as usize].into(), n),
-                0xf000 => {match (nn){
+                0xf000 => {match nn {
                             0x33 => self.div_vx(self.v[x as usize]),
                             0x55 => self.save_memory(x),
                             0x65 => self.load_memory(x),
-                            1_u8..=u8::MAX => todo!(),
+                            0x1E => self.add_i(x),
                             0_u8 => todo!(),
+                            _ => todo!(),
                 };},
                 _ => println!("no hay instruccion"),
             }
