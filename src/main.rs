@@ -80,8 +80,6 @@ impl Chip8 {
     }
     fn del(&mut self) -> u16 {
         let pc: u16 = self.stack[self.sp as usize];
-        self.stack[self.sp as usize] = 0x0;
-        self.sp -= 1;
 
         pc
     }
@@ -122,12 +120,18 @@ impl Chip8 {
     }
 
     fn del_stack(&mut self) {
-        self.pc = self.del();
+        if self.sp == 0 {
+            println!("sp esta en 0");
+            return;
+        }
+        self.sp -= 1;
+
+        self.pc = self.stack[self.sp as usize];
     }
 
     // Skip instruccion
     fn skip_3xnn(&mut self, x: u8, nn: u8) {
-        if x == nn {
+        if self.v[x as usize] == nn {
             self.pc += 2;
         }
     }
@@ -281,42 +285,43 @@ impl Chip8 {
 
         let init = opcode & 0xf000;
         
-        match opcode {
-            0x00e0 => self.clear_screen(),
-            _ => match init {
-                0x1000 => self.jump(nnn),
-                0x2000 => self.jump_stack(nnn),
-                0x00ee => self.del_stack(),
-                0x3000 => self.skip_3xnn(x, nn),
-                0x4000 => self.skip_4xnn(x, nn),
-                0x5000 => self.skip_5xy0(x, y),
-                0x6000 => self.set(x, nn),
-                0x7000 => self.add(x, nn),
-                0x8000 => {match n {
-                            0x0 => self.set_vx_vy(x, y),
-                            0x1 => self.operator_or(x, y),
-                            0x2 => self.operator_and(x, y),
-                            0x3 => self.operator_xor(x, y),
-                            0x4 => self.add_vx_vy(x, y),
-                            0x5 => self.sub_vx_vy(x, y),
-                            0x6 => self.shift_right_vx(x),
-                            0x7 => self.sub_vy_vx(x, y),
-                            0xE => self.shift_left_vx(x),
-                            1_u8..=u8::MAX => todo!(),
-                };},
-                0x9000 => self.skip_9xy0(x, y),
-                0xa000 => self.set_index(nnn),
-                0xd000 => self.display(self.v[x as usize].into(), self.v[y as usize].into(), n),
-                0xf000 => {match nn {
-                            0x33 => self.div_vx(self.v[x as usize]),
-                            0x55 => self.save_memory(x),
-                            0x65 => self.load_memory(x),
-                            0x1E => self.add_i(x),
-                            0_u8 => todo!(),
-                            _ => todo!(),
-                };},
-                _ => println!("no hay instruccion"),
-            }
+        match init {
+            0x0000 => match nn {
+                    0xe0 => self.clear_screen(),
+                    0xee => self.del_stack(),
+                    _ => println!("no hay instruccion 1")
+                },
+            0x1000 => self.jump(nnn),
+            0x2000 => self.jump_stack(nnn),
+            0x3000 => self.skip_3xnn(x, nn),
+            0x4000 => self.skip_4xnn(x, nn),
+            0x5000 => self.skip_5xy0(x, y),
+            0x6000 => self.set(x, nn),
+            0x7000 => self.add(x, nn),
+            0x8000 => {match n {
+                        0x0 => self.set_vx_vy(x, y),
+                        0x1 => self.operator_or(x, y),
+                        0x2 => self.operator_and(x, y),
+                        0x3 => self.operator_xor(x, y),
+                        0x4 => self.add_vx_vy(x, y),
+                        0x5 => self.sub_vx_vy(x, y),
+                        0x6 => self.shift_right_vx(x),
+                        0x7 => self.sub_vy_vx(x, y),
+                        0xE => self.shift_left_vx(x),
+                        1_u8..=u8::MAX => todo!(),
+            };},
+            0x9000 => self.skip_9xy0(x, y),
+            0xa000 => self.set_index(nnn),
+            0xd000 => self.display(self.v[x as usize].into(), self.v[y as usize].into(), n),
+            0xf000 => {match nn {
+                        0x33 => self.div_vx(self.v[x as usize]),
+                        0x55 => self.save_memory(x),
+                        0x65 => self.load_memory(x),
+                        0x1E => self.add_i(x),
+                        0_u8 => todo!(),
+                        _ => println!("no hay instruccion 2"),
+            };},
+            _ => println!("no hay instruccion 3"),
         }    
     }
 }
